@@ -32,6 +32,28 @@ async function run() {
     // await client.connect();
 
     // database collections
+    const usersCollection = client
+      .db("medical_camp_management")
+      .collection("users");
+
+    // save users information in the database
+    app.post("/users", async (req, res) => {
+      const email = req.body.email;
+      const user = req.body;
+      try {
+        const emailExist = await usersCollection.findOne({ email });
+        if (emailExist) {
+          return res
+            .status(200)
+            .send({ message: "user already exists", inserted: false });
+        }
+
+        const result = await usersCollection.insertOne(user);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to post user data", error });
+      }
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
