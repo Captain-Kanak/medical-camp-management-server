@@ -70,6 +70,31 @@ async function run() {
       res.send(result);
     });
 
+    // get user role
+    app.get("/users/role/:email", async (req, res) => {
+      const email = req.params.email;
+
+      if (!email) {
+        return res.status(400).send({ error: "Email is required" });
+      }
+
+      try {
+        const user = await usersCollection.findOne(
+          { email },
+          { projection: { role: 1 } }
+        );
+
+        if (!user) {
+          return res.status(404).send({ error: "User not found" });
+        }
+
+        res.send({ role: user.role || "participant" }); // default to "participant" if role is undefined
+      } catch (err) {
+        console.error("Error getting user role:", err);
+        res.status(500).send({ error: "Internal Server Error" });
+      }
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
