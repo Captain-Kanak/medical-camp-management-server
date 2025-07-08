@@ -55,6 +55,21 @@ async function run() {
       }
     });
 
+    // update user last sign in time
+    app.patch("/users", async (req, res) => {
+      const { email, lastSignInTime } = req.body;
+
+      const query = { email };
+      const updateDoc = {
+        $set: {
+          last_signin_time: lastSignInTime,
+        },
+      };
+
+      const result = await usersCollection.updateOne(query, updateDoc);
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
