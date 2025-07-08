@@ -60,6 +60,7 @@ async function run() {
       const { email, lastSignInTime } = req.body;
 
       const query = { email };
+
       const updateDoc = {
         $set: {
           last_signin_time: lastSignInTime,
@@ -68,6 +69,36 @@ async function run() {
 
       const result = await usersCollection.updateOne(query, updateDoc);
       res.send(result);
+    });
+
+    // update user profile information
+    app.patch("/users/profile-update", async (req, res) => {
+      try {
+        const { email, name, photo } = req.body;
+
+        if (!email) {
+          return res.status(400).send({ error: "Email is required." });
+        }
+
+        const query = { email };
+        const updateDoc = {
+          $set: {},
+        };
+
+        // Only update fields that were sent
+        if (name) updateDoc.$set.name = name;
+        if (photo) updateDoc.$set.photo = photo;
+
+        if (Object.keys(updateDoc.$set).length === 0) {
+          return res.status(400).send({ error: "No fields to update." });
+        }
+
+        const result = await usersCollection.updateOne(query, updateDoc);
+        res.send(result);
+      } catch (error) {
+        console.error("Profile update error:", error);
+        res.status(500).send({ error: "Internal Server Error" });
+      }
     });
 
     // get user role
