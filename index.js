@@ -36,6 +36,10 @@ async function run() {
       .db("medical_camp_management")
       .collection("users");
 
+    const campsCollection = client
+      .db("medical_camp_management")
+      .collection("camps");
+
     // save users information in the database
     app.post("/users", async (req, res) => {
       const email = req.body.email;
@@ -124,6 +128,15 @@ async function run() {
         console.error("Error getting user role:", err);
         res.status(500).send({ error: "Internal Server Error" });
       }
+    });
+
+    // save camps information in the database
+    app.post("/camps", async (req, res) => {
+      const campData = req.body;
+      campData.created_at = new Date().toISOString();
+
+      const result = await campsCollection.insertOne(campData);
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
