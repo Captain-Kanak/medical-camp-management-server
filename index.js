@@ -139,6 +139,16 @@ async function run() {
       res.send(result);
     });
 
+    // get all camps data
+    app.get("/camps", async (req, res) => {
+      const result = await campsCollection
+        .find()
+        .sort({ created_at: -1 })
+        .toArray();
+
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
