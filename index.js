@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 // Load environment variables
 dotenv.config();
@@ -146,6 +146,16 @@ async function run() {
         .sort({ created_at: -1 })
         .toArray();
 
+      res.send(result);
+    });
+
+    // delete camp
+    app.delete("/delete-camp/:campId", async (req, res) => {
+      const campId = req.params.campId;
+
+      const query = { _id: new ObjectId(campId) };
+
+      const result = await campsCollection.deleteOne(query);
       res.send(result);
     });
 
