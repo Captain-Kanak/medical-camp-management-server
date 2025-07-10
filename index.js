@@ -40,6 +40,10 @@ async function run() {
       .db("medical_camp_management")
       .collection("camps");
 
+    const registredCampsCollection = client
+      .db("medical_camp_management")
+      .collection("registred_camps");
+
     // save users information in the database
     app.post("/users", async (req, res) => {
       const email = req.body.email;
@@ -231,6 +235,35 @@ async function run() {
 
       const result = await campsCollection.updateOne(query, updateDoc);
       res.send(result);
+    });
+
+    // save registred camps in the database
+    app.post("/camp-registration", async (req, res) => {
+      try {
+        const registrationData = req.body;
+        const { campId } = registrationData;
+        console.log(campId);
+
+        if (!campId) {
+          return res.status(400).send({ error: "campId is required" });
+        }
+
+        // 1. Insert registration data
+        const result = await registredCampsCollection.insertOne(
+          registrationData
+        );
+
+        // 2. Update participant count in campsCollection
+        await campsCollection.updateOne(
+          { _id: new ObjectId(campId) },
+          { $inc: { participantCount: 1 } }
+        );
+
+        res.send(result);
+      } catch (error) {
+        console.error("Registration error:", error);
+        res.status(500).send({ error: "Registration failed" });
+      }
     });
 
     // Send a ping to confirm a successful connection
