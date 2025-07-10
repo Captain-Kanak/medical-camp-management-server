@@ -159,6 +159,21 @@ async function run() {
       res.send(result);
     });
 
+    // update camp information
+    app.put("/update-camp/:campId", async (req, res) => {
+      const updateCamp = req.body;
+      const campId = req.params.campId;
+
+      const query = { _id: new ObjectId(campId) };
+      updateCamp.updated_at = new Date().toISOString();
+      const updateDoc = {
+        $set: updateCamp,
+      };
+
+      const result = await campsCollection.updateOne(query, updateDoc);
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
