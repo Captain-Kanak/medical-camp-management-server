@@ -140,13 +140,72 @@ async function run() {
     });
 
     // get all camps data
-    app.get("/camps", async (req, res) => {
-      const result = await campsCollection
-        .find()
-        .sort({ created_at: -1 })
-        .toArray();
+    app.get("/camps/paginated", async (req, res) => {
+      try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 9;
+        const skip = (page - 1) * limit;
 
-      res.send(result);
+        // Fetch paginated camps and total count
+        const [camps, totalCount] = await Promise.all([
+          campsCollection
+            .find()
+            .sort({ created_at: -1 }) // newest camps first
+            .skip(skip)
+            .limit(limit)
+            .toArray(),
+
+          campsCollection.estimatedDocumentCount(),
+        ]);
+
+        res.send({
+          camps,
+          totalPages: Math.ceil(totalCount / limit),
+          currentPage: page,
+        });
+      } catch (error) {
+        console.error("Pagination error:", error);
+        res.status(500).send({ message: "Failed to fetch paginated camps" });
+      }
+    });
+
+    // GET top 6 popular camps
+    app.get("/camps/popular", async (req, res) => {
+      try {
+        const camps = await campsCollection
+          .find()
+          .sort({ participantCount: -1 })
+          .limit(6)
+          .toArray();
+
+        res.send(camps);
+      } catch (err) {
+        res.status(500).send({ error: "Failed to fetch popular camps" });
+      }
+    });
+
+    // Get single camp details by ID
+    app.get("/camp-details/:id", async (req, res) => {
+      const campId = req.params.id;
+
+      if (!ObjectId.isValid(campId)) {
+        return res.status(400).send({ message: "Invalid camp ID" });
+      }
+
+      try {
+        const camp = await campsCollection.findOne({
+          _id: new ObjectId(campId),
+        });
+
+        if (!camp) {
+          return res.status(404).send({ message: "Camp not found" });
+        }
+
+        res.send(camp);
+      } catch (error) {
+        console.error("Error fetching camp details:", error);
+        res.status(500).send({ message: "Failed to fetch camp details" });
+      }
     });
 
     // delete camp
