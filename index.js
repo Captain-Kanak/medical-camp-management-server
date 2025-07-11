@@ -143,7 +143,18 @@ async function run() {
       res.send(result);
     });
 
-    // get all camps data
+    // Get all camps (no pagination)
+    app.get("/camps", async (req, res) => {
+      try {
+        const camps = await campsCollection.find().toArray();
+        res.send(camps);
+      } catch (error) {
+        console.error("Error fetching camps:", error);
+        res.status(500).send({ message: "Failed to fetch camps" });
+      }
+    });
+
+    // get all camps data (pagination)
     app.get("/camps/paginated", async (req, res) => {
       try {
         const page = parseInt(req.query.page) || 1;
@@ -248,6 +259,10 @@ async function run() {
           return res.status(400).send({ error: "campId is required" });
         }
 
+        registrationData.registred_at = new Date().toISOString();
+        registrationData.payment_status = "unpaid";
+        registrationData.confirmation_status = "pending";
+
         // 1. Insert registration data
         const result = await registredCampsCollection.insertOne(
           registrationData
@@ -264,6 +279,30 @@ async function run() {
         console.error("Registration error:", error);
         res.status(500).send({ error: "Registration failed" });
       }
+    });
+
+    app.get("/camps-registred", async (req, res) => {
+      const result = await registredCampsCollection
+        .find()
+        .sort({ registred_at: -1 })
+        .toArray();
+
+      res.send(result);
+    });
+
+    // Cancel registered camp by ID
+    app.delete("/cancel-registration/:id", async (req, res) => {
+      const id = req.params.id;
+
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ message: "Invalid registration ID" });
+      }
+
+      const result = await registredCampsCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
