@@ -281,6 +281,7 @@ async function run() {
       }
     });
 
+    // GET registred camps
     app.get("/camps-registred", async (req, res) => {
       const result = await registredCampsCollection
         .find()
@@ -292,15 +293,40 @@ async function run() {
 
     // Cancel registered camp by ID
     app.delete("/cancel-registration/:id", async (req, res) => {
-      const id = req.params.id;
+      const registrationId = req.params.id;
+      const campId = req.query.campId;
 
-      if (!ObjectId.isValid(id)) {
-        return res.status(400).send({ message: "Invalid registration ID" });
+      if (!ObjectId.isValid(registrationId) || !ObjectId.isValid(campId)) {
+        return res.status(400).send({ message: "Invalid ID(s)" });
       }
 
-      const result = await registredCampsCollection.deleteOne({
-        _id: new ObjectId(id),
-      });
+      try {
+        // 1. Delete the registration
+        const deleteResult = await registredCampsCollection.deleteOne({
+          _id: new ObjectId(registrationId),
+        });
+
+        // 2. Decrement participant count
+        await campsCollection.updateOne(
+          { _id: new ObjectId(campId) },
+          { $inc: { participantCount: -1 } }
+        );
+
+        res.send(deleteResult);
+      } catch (error) {
+        console.error("Cancellation error:", error);
+        res.status(500).send({ error: "Failed to cancel registration" });
+      }
+    });
+
+    // get registred camps by user email
+    app.get("/registered-camps", async (req, res) => {
+      const email = req.query.email;
+
+      const result = await registredCampsCollection
+        .find({ email })
+        .sort({ registred_at: -1 })
+        .toArray();
 
       res.send(result);
     });
