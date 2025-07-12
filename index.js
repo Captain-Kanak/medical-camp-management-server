@@ -6,6 +6,9 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 // Load environment variables
 dotenv.config();
 
+// stripe require
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
 // create app and port
 const app = express();
 const port = process.env.PORT || 5000;
@@ -282,7 +285,7 @@ async function run() {
     });
 
     // GET registred camps
-    app.get("/camps-registred", async (req, res) => {
+    app.get("/camps-registered", async (req, res) => {
       const result = await registredCampsCollection
         .find()
         .sort({ registred_at: -1 })
@@ -329,6 +332,45 @@ async function run() {
         .toArray();
 
       res.send(result);
+    });
+
+    // GET camp for payment
+    app.get("/registered-camp/:campId", async (req, res) => {
+      const campId = req.params.campId;
+
+      if (!ObjectId.isValid(campId)) {
+        return res.status(400).send({ message: "Invalid camp ID" });
+      }
+
+      try {
+        const query = { _id: new ObjectId(campId) };
+        const result = await registredCampsCollection.findOne(query);
+
+        if (!result) {
+          return res.status(404).send({ message: "Camp not found" });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching camp for payment:", error);
+        res.status(500).send({ message: "Server error" });
+      }
+    });
+
+    // create payment intent
+    app.post("/create-payment-intent", async (req, res) => {
+      const amountInCents = req.body.amountInCents;
+      try {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amountInCents,
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+
+        res.json({ clientSecret: paymentIntent.client_secret });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
     });
 
     // Send a ping to confirm a successful connection
