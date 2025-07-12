@@ -43,9 +43,13 @@ async function run() {
       .db("medical_camp_management")
       .collection("camps");
 
-    const registredCampsCollection = client
+    const registeredCampsCollection = client
       .db("medical_camp_management")
-      .collection("registred_camps");
+      .collection("registered_camps");
+
+    const paymentsCollection = client
+      .db("medical_camp_management")
+      .collection("payments");
 
     // save users information in the database
     app.post("/users", async (req, res) => {
@@ -251,7 +255,7 @@ async function run() {
       res.send(result);
     });
 
-    // save registred camps in the database
+    // save registered camps in the database
     app.post("/camp-registration", async (req, res) => {
       try {
         const registrationData = req.body;
@@ -262,12 +266,12 @@ async function run() {
           return res.status(400).send({ error: "campId is required" });
         }
 
-        registrationData.registred_at = new Date().toISOString();
+        registrationData.registered_at = new Date().toISOString();
         registrationData.payment_status = "unpaid";
         registrationData.confirmation_status = "pending";
 
         // 1. Insert registration data
-        const result = await registredCampsCollection.insertOne(
+        const result = await registeredCampsCollection.insertOne(
           registrationData
         );
 
@@ -284,11 +288,11 @@ async function run() {
       }
     });
 
-    // GET registred camps
+    // GET registered camps
     app.get("/camps-registered", async (req, res) => {
-      const result = await registredCampsCollection
+      const result = await registeredCampsCollection
         .find()
-        .sort({ registred_at: -1 })
+        .sort({ registered_at: -1 })
         .toArray();
 
       res.send(result);
@@ -305,7 +309,7 @@ async function run() {
 
       try {
         // 1. Delete the registration
-        const deleteResult = await registredCampsCollection.deleteOne({
+        const deleteResult = await registeredCampsCollection.deleteOne({
           _id: new ObjectId(registrationId),
         });
 
@@ -322,13 +326,13 @@ async function run() {
       }
     });
 
-    // get registred camps by user email
+    // get registered camps by user email
     app.get("/registered-camps", async (req, res) => {
       const email = req.query.email;
 
-      const result = await registredCampsCollection
+      const result = await registeredCampsCollection
         .find({ email })
-        .sort({ registred_at: -1 })
+        .sort({ registered_at: -1 })
         .toArray();
 
       res.send(result);
@@ -344,7 +348,7 @@ async function run() {
 
       try {
         const query = { _id: new ObjectId(campId) };
-        const result = await registredCampsCollection.findOne(query);
+        const result = await registeredCampsCollection.findOne(query);
 
         if (!result) {
           return res.status(404).send({ message: "Camp not found" });
@@ -371,6 +375,58 @@ async function run() {
       } catch (error) {
         res.status(500).json({ error: error.message });
       }
+    });
+
+    // GET payment history
+    app.get("/payments", async (req, res) => {
+      const userEmail = req.query.email;
+      const query = userEmail ? { email: userEmail } : {};
+      const options = { sort: { paid_at: -1 } };
+
+      const result = await paymentsCollection.find(query, options).toArray();
+      res.send(result);
+    });
+
+    // create payments history
+    app.post("/payments", async (req, res) => {
+      const { campId, email, amount, paymentMethod, transactionId } = req.body;
+
+      if (!campId || !email || !amount) {
+        return res
+          .status(400)
+          .send({ message: "campId, email and amount are required" });
+      }
+
+      // update payment_status
+      const updateResult = await registeredCampsCollection.updateOne(
+        {
+          _id: new ObjectId(campId),
+        },
+        { $set: { payment_status: "paid", confirmation_status: "confirmed" } }
+      );
+
+      if (updateResult.modifiedCount === 0) {
+        return res
+          .status(404)
+          .send({ message: "camp not found or already paid" });
+      }
+
+      // insert payments history
+      const paymentDoc = {
+        campId,
+        email,
+        fees: amount,
+        paymentMethod,
+        transactionId,
+        paid_at: new Date().toISOString(),
+      };
+
+      const paymentResult = await paymentsCollection.insertOne(paymentDoc);
+
+      res.status(201).send({
+        message: "payment history created and camp mark as paid",
+        insertedId: paymentResult.insertedId,
+      });
     });
 
     // Send a ping to confirm a successful connection
