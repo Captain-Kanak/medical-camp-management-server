@@ -1,21 +1,31 @@
-const express = require("express");
-const cors = require("cors");
+// require and load environment variables
 const dotenv = require("dotenv");
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
-// Load environment variables
 dotenv.config();
 
-// stripe require
+const express = require("express");
+const cors = require("cors");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const admin = require("firebase-admin");
 
 // create app and port
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Middleware
+// middleware
 app.use(cors());
 app.use(express.json());
+
+// firebase
+const decoded = Buffer.from(
+  process.env.FB_ADMIN_SERVICE_KEY,
+  "base64"
+).toString("utf8");
+const serviceAccount = JSON.parse(decoded);
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 // database management
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.0d3a79b.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -50,6 +60,28 @@ async function run() {
     const paymentsCollection = client
       .db("medical_camp_management")
       .collection("payments");
+
+    // custom middleware for secure API
+    const verifyUser = async (req, res, next) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+
+      const token = authHeader.split(" ")[1];
+      if (!token) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+
+      // verify the token
+      try {
+        const decoded = await admin.auth().verifyIdToken(token);
+        req.decoded = decoded;
+        next();
+      } catch (error) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+    };
 
     // save users information in the database
     app.post("/users", async (req, res) => {
@@ -327,7 +359,7 @@ async function run() {
     });
 
     // get registered camps by user email
-    app.get("/registered-camps", async (req, res) => {
+    app.get("/registered-camps", verifyUser, async (req, res) => {
       const email = req.query.email;
 
       const result = await registeredCampsCollection
