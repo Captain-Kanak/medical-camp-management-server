@@ -16,6 +16,28 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// custom middleware for secure API
+const verifyUser = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ message: "unauthorized access" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  if (!token) {
+    return res.status(401).send({ message: "unauthorized access" });
+  }
+
+  // verify the token
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.decoded = decoded;
+    next();
+  } catch (error) {
+    return res.status(403).send({ message: "forbidden access" });
+  }
+};
+
 // firebase
 const decoded = Buffer.from(
   process.env.FB_ADMIN_SERVICE_KEY,
@@ -61,32 +83,11 @@ async function run() {
       .db("medical_camp_management")
       .collection("payments");
 
-    // custom middleware for secure API
-    const verifyUser = async (req, res, next) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader) {
-        return res.status(401).send({ message: "unauthorized access" });
-      }
-
-      const token = authHeader.split(" ")[1];
-      if (!token) {
-        return res.status(401).send({ message: "unauthorized access" });
-      }
-
-      // verify the token
-      try {
-        const decoded = await admin.auth().verifyIdToken(token);
-        req.decoded = decoded;
-        next();
-      } catch (error) {
-        return res.status(403).send({ message: "forbidden access" });
-      }
-    };
-
-    // save users information in the database
+    // save users information
     app.post("/users", async (req, res) => {
       const email = req.body.email;
       const user = req.body;
+
       try {
         const emailExist = await usersCollection.findOne({ email });
         if (emailExist) {
@@ -149,8 +150,8 @@ async function run() {
     });
 
     // get user role
-    app.get("/users/role/:email", async (req, res) => {
-      const email = req.params.email;
+    app.get("/users/role/", verifyUser, async (req, res) => {
+      const email = req.query.email;
 
       if (!email) {
         return res.status(400).send({ error: "Email is required" });
@@ -166,15 +167,15 @@ async function run() {
           return res.status(404).send({ error: "User not found" });
         }
 
-        res.send({ role: user.role || "participant" }); // default to "participant" if role is undefined
+        res.send({ role: user.role || "participant" });
       } catch (err) {
         console.error("Error getting user role:", err);
         res.status(500).send({ error: "Internal Server Error" });
       }
     });
 
-    // save camps information in the database
-    app.post("/camps", async (req, res) => {
+    // save camps information
+    app.post("/camps", verifyUser, async (req, res) => {
       const campData = req.body;
       campData.created_at = new Date().toISOString();
 
@@ -182,8 +183,8 @@ async function run() {
       res.send(result);
     });
 
-    // Get all camps (no pagination)
-    app.get("/camps", async (req, res) => {
+    // get all camps (no pagination) for organizer
+    app.get("/camps", verifyUser, async (req, res) => {
       try {
         const camps = await campsCollection.find().toArray();
         res.send(camps);
@@ -193,7 +194,7 @@ async function run() {
       }
     });
 
-    // get all camps data (pagination)
+    // get all camps (pagination)
     app.get("/camps/paginated", async (req, res) => {
       try {
         const page = parseInt(req.query.page) || 1;
@@ -223,7 +224,7 @@ async function run() {
       }
     });
 
-    // GET top 6 popular camps
+    // get top 6 popular camps
     app.get("/camps/popular", async (req, res) => {
       try {
         const camps = await campsCollection
@@ -238,9 +239,9 @@ async function run() {
       }
     });
 
-    // Get single camp details by ID
-    app.get("/camp-details/:id", async (req, res) => {
-      const campId = req.params.id;
+    // get single camp details by ID
+    app.get("/camp-details/:campId", async (req, res) => {
+      const campId = req.params.campId;
 
       if (!ObjectId.isValid(campId)) {
         return res.status(400).send({ message: "Invalid camp ID" });
@@ -263,7 +264,7 @@ async function run() {
     });
 
     // delete camp
-    app.delete("/delete-camp/:campId", async (req, res) => {
+    app.delete("/delete-camp/:campId", verifyUser, async (req, res) => {
       const campId = req.params.campId;
 
       const query = { _id: new ObjectId(campId) };
@@ -273,7 +274,7 @@ async function run() {
     });
 
     // update camp information
-    app.put("/update-camp/:campId", async (req, res) => {
+    app.patch("/update-camp/:campId", verifyUser, async (req, res) => {
       const updateCamp = req.body;
       const campId = req.params.campId;
 
@@ -287,8 +288,8 @@ async function run() {
       res.send(result);
     });
 
-    // save registered camps in the database
-    app.post("/camp-registration", async (req, res) => {
+    // save registered camps
+    app.post("/camp-registration", verifyUser, async (req, res) => {
       try {
         const registrationData = req.body;
         const { campId } = registrationData;
@@ -320,8 +321,8 @@ async function run() {
       }
     });
 
-    // GET registered camps
-    app.get("/camps-registered", async (req, res) => {
+    // get registered camps
+    app.get("/camps-registered", verifyUser, async (req, res) => {
       const result = await registeredCampsCollection
         .find()
         .sort({ registered_at: -1 })
@@ -330,8 +331,8 @@ async function run() {
       res.send(result);
     });
 
-    // Cancel registered camp by ID
-    app.delete("/cancel-registration/:id", async (req, res) => {
+    // delete registered camp by ID
+    app.delete("/cancel-registration/:id", verifyUser, async (req, res) => {
       const registrationId = req.params.id;
       const campId = req.query.campId;
 
@@ -370,8 +371,8 @@ async function run() {
       res.send(result);
     });
 
-    // GET camp for payment
-    app.get("/registered-camp/:campId", async (req, res) => {
+    // get camp for payment
+    app.get("/registered-camp/:campId", verifyUser, async (req, res) => {
       const campId = req.params.campId;
 
       if (!ObjectId.isValid(campId)) {
@@ -394,7 +395,7 @@ async function run() {
     });
 
     // create payment intent
-    app.post("/create-payment-intent", async (req, res) => {
+    app.post("/create-payment-intent", verifyUser, async (req, res) => {
       const amountInCents = req.body.amountInCents;
       try {
         const paymentIntent = await stripe.paymentIntents.create({
@@ -409,18 +410,8 @@ async function run() {
       }
     });
 
-    // GET payment history
-    app.get("/payments", async (req, res) => {
-      const userEmail = req.query.email;
-      const query = userEmail ? { email: userEmail } : {};
-      const options = { sort: { paid_at: -1 } };
-
-      const result = await paymentsCollection.find(query, options).toArray();
-      res.send(result);
-    });
-
     // create payments history
-    app.post("/payments", async (req, res) => {
+    app.post("/payments", verifyUser, async (req, res) => {
       const { campId, email, amount, paymentMethod, transactionId } = req.body;
 
       if (!campId || !email || !amount) {
@@ -459,6 +450,16 @@ async function run() {
         message: "payment history created and camp mark as paid",
         insertedId: paymentResult.insertedId,
       });
+    });
+
+    // get payment history
+    app.get("/payments", verifyUser, async (req, res) => {
+      const userEmail = req.query.email;
+      const query = userEmail ? { email: userEmail } : {};
+      const options = { sort: { paid_at: -1 } };
+
+      const result = await paymentsCollection.find(query, options).toArray();
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
