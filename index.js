@@ -16,28 +16,6 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// custom middleware for secure API
-const verifyUser = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).send({ message: "unauthorized access" });
-  }
-
-  const token = authHeader.split(" ")[1];
-  if (!token) {
-    return res.status(401).send({ message: "unauthorized access" });
-  }
-
-  // verify the token
-  try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    req.decoded = decoded;
-    next();
-  } catch (error) {
-    return res.status(403).send({ message: "forbidden access" });
-  }
-};
-
 // firebase
 const decoded = Buffer.from(
   process.env.FB_ADMIN_SERVICE_KEY,
@@ -82,6 +60,42 @@ async function run() {
     const paymentsCollection = client
       .db("medical_camp_management")
       .collection("payments");
+
+    // custom middleware for secure API
+    // verify user
+    const verifyUser = async (req, res, next) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+
+      const token = authHeader.split(" ")[1];
+      if (!token) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+
+      // verify the token
+      try {
+        const decoded = await admin.auth().verifyIdToken(token);
+        req.decoded = decoded;
+        next();
+      } catch (error) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+    };
+
+    // verify organizer
+    const verifyOrganizer = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email };
+
+      const user = await usersCollection.findOne(query);
+      if (!user || user.role !== "organizer") {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+
+      next();
+    };
 
     // save users information
     app.post("/users", async (req, res) => {
@@ -175,7 +189,7 @@ async function run() {
     });
 
     // save camps information
-    app.post("/camps", verifyUser, async (req, res) => {
+    app.post("/camps", verifyUser, verifyOrganizer, async (req, res) => {
       const campData = req.body;
       campData.created_at = new Date().toISOString();
 
@@ -184,7 +198,7 @@ async function run() {
     });
 
     // get all camps (no pagination) for organizer
-    app.get("/camps", verifyUser, async (req, res) => {
+    app.get("/camps", verifyUser, verifyOrganizer, async (req, res) => {
       try {
         const camps = await campsCollection.find().toArray();
         res.send(camps);
@@ -264,29 +278,39 @@ async function run() {
     });
 
     // delete camp
-    app.delete("/delete-camp/:campId", verifyUser, async (req, res) => {
-      const campId = req.params.campId;
+    app.delete(
+      "/delete-camp/:campId",
+      verifyUser,
+      verifyOrganizer,
+      async (req, res) => {
+        const campId = req.params.campId;
 
-      const query = { _id: new ObjectId(campId) };
+        const query = { _id: new ObjectId(campId) };
 
-      const result = await campsCollection.deleteOne(query);
-      res.send(result);
-    });
+        const result = await campsCollection.deleteOne(query);
+        res.send(result);
+      }
+    );
 
     // update camp information
-    app.patch("/update-camp/:campId", verifyUser, async (req, res) => {
-      const updateCamp = req.body;
-      const campId = req.params.campId;
+    app.patch(
+      "/update-camp/:campId",
+      verifyUser,
+      verifyOrganizer,
+      async (req, res) => {
+        const updateCamp = req.body;
+        const campId = req.params.campId;
 
-      const query = { _id: new ObjectId(campId) };
-      updateCamp.updated_at = new Date().toISOString();
-      const updateDoc = {
-        $set: updateCamp,
-      };
+        const query = { _id: new ObjectId(campId) };
+        updateCamp.updated_at = new Date().toISOString();
+        const updateDoc = {
+          $set: updateCamp,
+        };
 
-      const result = await campsCollection.updateOne(query, updateDoc);
-      res.send(result);
-    });
+        const result = await campsCollection.updateOne(query, updateDoc);
+        res.send(result);
+      }
+    );
 
     // save registered camps
     app.post("/camp-registration", verifyUser, async (req, res) => {
@@ -322,14 +346,19 @@ async function run() {
     });
 
     // get registered camps
-    app.get("/camps-registered", verifyUser, async (req, res) => {
-      const result = await registeredCampsCollection
-        .find()
-        .sort({ registered_at: -1 })
-        .toArray();
+    app.get(
+      "/camps-registered",
+      verifyUser,
+      verifyOrganizer,
+      async (req, res) => {
+        const result = await registeredCampsCollection
+          .find()
+          .sort({ registered_at: -1 })
+          .toArray();
 
-      res.send(result);
-    });
+        res.send(result);
+      }
+    );
 
     // delete registered camp by ID
     app.delete("/cancel-registration/:id", verifyUser, async (req, res) => {
@@ -412,7 +441,8 @@ async function run() {
 
     // create payments history
     app.post("/payments", verifyUser, async (req, res) => {
-      const { campId, email, amount, paymentMethod, transactionId } = req.body;
+      const { campId, campName, email, amount, paymentMethod, transactionId } =
+        req.body;
 
       if (!campId || !email || !amount) {
         return res
@@ -437,8 +467,11 @@ async function run() {
       // insert payments history
       const paymentDoc = {
         campId,
+        campName,
         email,
         fees: amount,
+        payment_status: "paid",
+        confirmation_status: "confirmed",
         paymentMethod,
         transactionId,
         paid_at: new Date().toISOString(),
