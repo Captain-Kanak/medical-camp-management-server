@@ -61,6 +61,10 @@ async function run() {
       .db("medical_camp_management")
       .collection("payments");
 
+    const feedbacksCollection = client
+      .db("medical_camp_management")
+      .collection("feedbacks");
+
     // custom middleware for secure API
     // verify user
     const verifyUser = async (req, res, next) => {
@@ -492,6 +496,24 @@ async function run() {
       const options = { sort: { paid_at: -1 } };
 
       const result = await paymentsCollection.find(query, options).toArray();
+      res.send(result);
+    });
+
+    // save feedbacks
+    app.post("/feedbacks", verifyUser, async (req, res) => {
+      const feedback = req.body;
+
+      const result = await feedbacksCollection.insertOne(feedback);
+      res.send(result);
+    });
+
+    // get all feedbacks
+    app.get("/feedbacks", async (req, res) => {
+      const result = await feedbacksCollection
+        .find()
+        .sort({ createdAt: -1 })
+        .toArray();
+
       res.send(result);
     });
 
