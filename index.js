@@ -13,7 +13,12 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 // middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: ["https://medical-camp-management-f1b2a.web.app"],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // firebase
@@ -321,7 +326,6 @@ async function run() {
       try {
         const registrationData = req.body;
         const { campId } = registrationData;
-        console.log(campId);
 
         if (!campId) {
           return res.status(400).send({ error: "campId is required" });
