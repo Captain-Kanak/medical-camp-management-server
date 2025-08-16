@@ -15,7 +15,10 @@ const port = process.env.PORT || 5000;
 // middleware
 app.use(
   cors({
-    origin: ["https://medical-camp-management-f1b2a.web.app"],
+    origin: [
+      "https://medical-camp-management-f1b2a.web.app",
+      "http://localhost:5173",
+    ],
     credentials: true,
   })
 );
