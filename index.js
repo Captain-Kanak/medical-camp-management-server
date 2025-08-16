@@ -73,6 +73,10 @@ async function run() {
       .db("medical_camp_management")
       .collection("feedbacks");
 
+    const messagesCollection = client
+      .db("medical_camp_management")
+      .collection("messages");
+
     // custom middleware for secure API
     // verify user
     const verifyUser = async (req, res, next) => {
@@ -250,7 +254,7 @@ async function run() {
       }
     });
 
-    // get top 6 popular camps
+    // get top 8 popular camps
     app.get("/camps/popular", async (req, res) => {
       try {
         const camps = await campsCollection
@@ -522,6 +526,24 @@ async function run() {
         .toArray();
 
       res.send(result);
+    });
+
+    // save messages
+    app.post("/messages", async (req, res) => {
+      const message = req.body;
+      message.sendAt = new Date().toISOString();
+
+      const result = await messagesCollection.insertOne(message);
+      res.send(message);
+    });
+
+    app.get("/messages", async (req, res) => {
+      const messages = await messagesCollection
+        .find()
+        .sort({ sendAt: -1 })
+        .toArray();
+
+      res.send(messages);
     });
 
     // Send a ping to confirm a successful connection
