@@ -534,7 +534,7 @@ async function run() {
       message.sendAt = new Date().toISOString();
 
       const result = await messagesCollection.insertOne(message);
-      res.send(message);
+      res.send(result);
     });
 
     app.get("/messages", async (req, res) => {
