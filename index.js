@@ -224,7 +224,7 @@ async function run() {
     app.get("/camps/paginated", async (req, res) => {
       try {
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 9;
+        const limit = parseInt(req.query.limit) || 12;
         const skip = (page - 1) * limit;
 
         // Fetch paginated camps and total count
